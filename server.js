@@ -8,9 +8,16 @@ app.use(express.json());
 
 let sessionCookies = "";
 
+// Latest Windows 10 Chrome User-Agent Header
+const LATEST_WIN10_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
 const HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-    'Accept-Language': 'en-US,en;q=0.9'
+    'User-Agent': LATEST_WIN10_CHROME_UA,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-Ch-Ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"'
 };
 
 app.get('/fb', async (req, res) => {
@@ -33,11 +40,9 @@ app.get('/fb', async (req, res) => {
 app.post('/login', async (req, res) => {
     const { email, pass } = req.body;
     try {
-        // Step 1: Get initial cookies and form tokens
         const initRes = await axios.get('https://mbasic.facebook.com/login/', { headers: HEADERS });
         const initCookies = initRes.headers['set-cookie'] ? initRes.headers['set-cookie'].join('; ') : '';
 
-        // Step 2: Submit Login
         const params = new URLSearchParams();
         params.append('email', email);
         params.append('pass', pass);
