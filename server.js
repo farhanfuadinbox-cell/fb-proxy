@@ -1,72 +1,45 @@
 const express = require('express');
-const axios = require('axios');
-const cheerio = require('cheerio');
+const puppeteer = require('puppeteer');
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-let sessionCookies = "";
-
-// Latest Windows 10 Chrome User-Agent Header
-const LATEST_WIN10_CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
-
-const HEADERS = {
-    'User-Agent': LATEST_WIN10_CHROME_UA,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Sec-Ch-Ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
-    'Sec-Ch-Ua-Mobile': '?0',
-    'Sec-Ch-Ua-Platform': '"Windows"'
-};
-
 app.get('/fb', async (req, res) => {
+    let browser;
     try {
-        const response = await axios.get('https://mbasic.facebook.com/', {
-            headers: { ...HEADERS, 'Cookie': sessionCookies }
+        browser = await puppeteer.launch({
+            headless: "new",
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
+        
+        // রিয়েল উইন্ডোজ চ্যাট ডাইরেক্ট ব্রাউজার সেটিং
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
+        
+        await page.goto('https://mbasic.facebook.com/login/', { waitUntil: 'networkidle2' });
+
+        // পেজের প্রয়োজনীয় লিঙ্ক ও UI টেক্সট এক্সট্র্যাক্ট
+        const content = await page.evaluate(() => {
+            let output = "=== FACEBOOK WEBSITE UI ===\n\n";
+            document.querySelectorAll('form, input, a, button, p').forEach(el => {
+                if (el.tagName === 'INPUT') {
+                    output += `[Input: ${el.name || el.type}] ${el.value}\n`;
+                } else if (el.innerText && el.innerText.trim().length > 0) {
+                    output += `${el.innerText.trim()}\n-------------------\n`;
+                }
+            });
+            return output;
         });
 
-        const $ = cheerio.load(response.data);
-        $('script, style, meta, link').remove();
-
-        let pageText = $("body").text().replace(/\s+/g, ' ').trim();
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.send(pageText || "Facebook Loaded");
+        res.send(content);
     } catch (error) {
-        res.status(500).send("Proxy Error");
-    }
-});
-
-app.post('/login', async (req, res) => {
-    const { email, pass } = req.body;
-    try {
-        const initRes = await axios.get('https://mbasic.facebook.com/login/', { headers: HEADERS });
-        const initCookies = initRes.headers['set-cookie'] ? initRes.headers['set-cookie'].join('; ') : '';
-
-        const params = new URLSearchParams();
-        params.append('email', email);
-        params.append('pass', pass);
-
-        const loginRes = await axios.post('https://mbasic.facebook.com/login/device-based/regular/login/', params, {
-            headers: {
-                ...HEADERS,
-                'Cookie': initCookies,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            maxRedirects: 0,
-            validateStatus: status => status >= 200 && status < 400
-        });
-
-        if (loginRes.headers['set-cookie']) {
-            sessionCookies = loginRes.headers['set-cookie'].join('; ');
-            res.send("SUCCESS");
-        } else {
-            res.send("FAILED");
-        }
-    } catch (e) {
-        res.send("ERROR: " + e.message);
+        res.status(500).send("Browser Render Error: " + error.message);
+    } finally {
+        if (browser) await browser.close();
     }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`Proxy running on port ${PORT}`));
